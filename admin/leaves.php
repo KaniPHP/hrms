@@ -3,6 +3,44 @@ require_once __DIR__ . '/../includes/admin_helpers.php';
 require_once __DIR__ . '/../includes/layout.php';
 requireLogin();
 $conn = adminDb();
+function markRejectedLeaveAbsent(mysqli $conn, int $employeeId, string $fromDate, string $toDate): void
+{
+    $employeeQuery = $conn->prepare('SELECT shift_id FROM employees WHERE id=? LIMIT 1');
+    $employeeQuery->bind_param('i', $employeeId);
+    $employeeQuery->execute();
+    $employee = $employeeQuery->get_result()->fetch_assoc();
+    if (!$employee) {
+        throw new InvalidArgumentException('Employee for the leave application was not found.');
+    }
+
+    $punchQuery = $conn->prepare('SELECT COUNT(*) AS total FROM attendance_punches WHERE employee_id=? AND punch_date=?');
+    $attendanceQuery = $conn->prepare(
+        'INSERT INTO attendance_records
+         (employee_id,attendance_date,shift_id,status,total_work_minutes,late_minutes,early_out_minutes,overtime_minutes,remarks)
+         VALUES (?,?,?,"absent",0,0,0,0,?)
+         ON DUPLICATE KEY UPDATE
+         shift_id=VALUES(shift_id),
+         status=IF(status IN ("present","late","early_out","manual_adjustment"), status, "absent"),
+         remarks=IF(status IN ("present","late","early_out","manual_adjustment"), remarks, VALUES(remarks))'
+    );
+    $remarks = 'Absent: leave application rejected and no punch was recorded.';
+    $period = new DatePeriod(
+        new DateTimeImmutable($fromDate),
+        new DateInterval('P1D'),
+        (new DateTimeImmutable($toDate))->modify('+1 day')
+    );
+    foreach ($period as $date) {
+        $day = $date->format('Y-m-d');
+        $punchQuery->bind_param('is', $employeeId, $day);
+        $punchQuery->execute();
+        if ((int)$punchQuery->get_result()->fetch_assoc()['total'] > 0) {
+            continue;
+        }
+        $shiftId = $employee['shift_id'] !== null ? (int)$employee['shift_id'] : null;
+        $attendanceQuery->bind_param('isis', $employeeId, $day, $shiftId, $remarks);
+        $attendanceQuery->execute();
+    }
+}
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         verifyCsrf();
@@ -20,12 +58,22 @@ try {
             if ($application['status'] !== 'pending') {
                 throw new InvalidArgumentException('Only pending leave applications can be reviewed.');
             }
+            $conn->begin_transaction();
             $review = $conn->prepare('UPDATE leave_applications SET status=? WHERE id=? AND status="pending"');
             $review->bind_param('si', $status, $id);
             $review->execute();
             if ($review->affected_rows !== 1) {
                 throw new RuntimeException('The leave application was already reviewed.');
             }
+            if ($status === 'rejected') {
+                $applicationDetails = $conn->prepare('SELECT employee_id,from_date,to_date FROM leave_applications WHERE id=?');
+                $applicationDetails->bind_param('i', $id);
+                $applicationDetails->execute();
+                $details = $applicationDetails->get_result()->fetch_assoc();
+                markRejectedLeaveAbsent($conn, (int)$details['employee_id'], $details['from_date'], $details['to_date']);
+            }
+            auditLog($conn, 'leave_application', $id, $action, ['status' => $status]);
+            $conn->commit();
             redirectWithFlash('/admin/leaves.php', $status === 'approved' ? 'Leave approved.' : 'Leave rejected.');
         }
         if ($action === 'delete') {
@@ -33,9 +81,16 @@ try {
             $s = $conn->prepare('DELETE FROM leave_applications WHERE id=?');
             $s->bind_param('i', $id);
             $s->execute();
+            auditLog($conn, 'leave_application', $id, 'delete');
             redirectWithFlash('/admin/leaves.php', 'Leave application deleted.');
         }
         $employee = postInt('employee_id');
+        $activeEmployee = $conn->prepare('SELECT id FROM employees WHERE id=? AND status="active" LIMIT 1');
+        $activeEmployee->bind_param('i', $employee);
+        $activeEmployee->execute();
+        if (!$activeEmployee->get_result()->num_rows) {
+            throw new InvalidArgumentException('Only active employees can receive attendance or leave records.');
+        }
         $type = postText('leave_type_code', 20);
         $from = postDate('from_date');
         $to = postDate('to_date');
@@ -45,15 +100,37 @@ try {
         $status = $_POST['status'] ?? 'pending';
         if (!in_array($status, ['pending', 'approved', 'rejected', 'cancelled'], true)) throw new InvalidArgumentException('Invalid leave status.');
         $reason = trim((string)($_POST['reason'] ?? ''));
+        $id = 0;
         if ($action === 'update') {
             $id = postInt('id');
+        }
+        if (in_array($status, ['pending', 'approved'], true)) {
+            $overlap = $conn->prepare(
+                'SELECT id
+                 FROM leave_applications
+                 WHERE employee_id=?
+                   AND status IN ("pending","approved")
+                   AND from_date <= ?
+                   AND to_date >= ?
+                   AND id <> ?
+                 LIMIT 1'
+            );
+            $overlap->bind_param('issi', $employee, $to, $from, $id);
+            $overlap->execute();
+            if ($overlap->get_result()->num_rows > 0) {
+                throw new InvalidArgumentException('This employee already has leave covering one or more selected dates.');
+            }
+        }
+        if ($action === 'update') {
             $s = $conn->prepare('UPDATE leave_applications SET employee_id=?,leave_type_code=?,from_date=?,to_date=?,days_requested=?,status=?,reason=? WHERE id=?');
             $s->bind_param('isssdssi', $employee, $type, $from, $to, $days, $status, $reason, $id);
             $s->execute();
+            auditLog($conn, 'leave_application', $id, 'update', ['employee_id' => $employee, 'from_date' => $from, 'to_date' => $to, 'status' => $status]);
         } else {
             $s = $conn->prepare('INSERT INTO leave_applications (employee_id,leave_type_code,from_date,to_date,days_requested,status,reason) VALUES (?,?,?,?,?,?,?)');
             $s->bind_param('isssdss', $employee, $type, $from, $to, $days, $status, $reason);
             $s->execute();
+            auditLog($conn, 'leave_application', $s->insert_id, 'create', ['employee_id' => $employee, 'from_date' => $from, 'to_date' => $to, 'status' => $status]);
         }
         redirectWithFlash('/admin/leaves.php', $action === 'update' ? 'Leave updated.' : 'Leave application created.');
     }
@@ -68,7 +145,7 @@ if (isset($_GET['edit'])) {
     $s->execute();
     $edit = $s->get_result()->fetch_assoc();
 }
-$employees = $conn->query('SELECT id,employee_code,full_name FROM employees ORDER BY full_name');
+$employees = $conn->query('SELECT id,employee_code,full_name FROM employees WHERE status="active" ORDER BY full_name');
 $types = $conn->query('SELECT code,name FROM leave_types WHERE active=1 ORDER BY priority_order');
 $pageSize = 10;
 $page = max(1, (int)($_GET['page'] ?? 1));

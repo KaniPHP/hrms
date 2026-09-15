@@ -24,6 +24,7 @@ try {
             $s->bind_param('ii', $leave, $id);
             $s->execute();
             if ($s->affected_rows !== 1) throw new RuntimeException('Only pending requests can be cancelled.');
+            auditLog($db, 'leave_application', $leave, 'cancel', ['employee_id' => $id]);
             sendAjaxJson(true, 'Leave request cancelled.', 'success', '/employee/leave.php?month=' . urlencode($month));
         }
         $type = trim((string)($_POST['leave_type_code'] ?? ''));
@@ -61,6 +62,7 @@ try {
         $s = $db->prepare('INSERT INTO leave_applications(employee_id,leave_type_code,from_date,to_date,days_requested,status,reason) VALUES(?,?,?,?,?,"pending",?)');
         $s->bind_param('isssds', $id, $type, $from, $to, $days, $reason);
         $s->execute();
+        auditLog($db, 'leave_application', $s->insert_id, 'create', ['employee_id' => $id, 'from_date' => $from, 'to_date' => $to, 'status' => 'pending']);
         sendAjaxJson(true, 'Leave request submitted for admin approval.', 'success', '/employee/leave.php?month=' . urlencode($month));
     }
 } catch (Throwable $e) {

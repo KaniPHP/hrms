@@ -10,6 +10,7 @@ Colorful PHP/MySQL admin panel for production and manufacturing teams. It includ
 - `admin/employees.php` - employee roster
 - `admin/shifts.php` - day, rotating, and overnight shift setup
 - `admin/attendance.php` - daily attendance review
+- `admin/punches.php` - manual punch-in/punch-out register and missing-punch source data
 - `admin/leaves.php` - leave applications and priority order
 - `admin/processing.php` - monthly processing history
 - `includes/Database.php` - OOP MySQL connection service
@@ -17,6 +18,7 @@ Colorful PHP/MySQL admin panel for production and manufacturing teams. It includ
 - `includes/layout.php` - shared sidebar, header, and footer
 - `database/schema.sql` - complete schema and sample data
 - `assets/css/style.css` - colorful responsive design
+- `TEST_CASES.md` - manual test cases for all HRMS modules
 
 All five admin modules now provide server-side CRUD forms. Create, edit, and
 delete actions use POST requests, prepared statements, CSRF tokens, validation,
@@ -51,8 +53,9 @@ carry-forward and utilization are visible in the employee history screens.
 1. Start Apache and MySQL in XAMPP.
 2. Open `http://localhost/phpmyadmin`.
 3. Import `database/schema.sql`. It creates the `hrms_db` database, tables, indexes, and sample data.
-4. Place this project at `C:\xampp\htdocs\HRMS`.
-5. Open `http://localhost/HRMS/`.
+4. Import `database/migration_attendance_punches.sql` to add indexed punch storage, attendance correction history, and the `audit_logs` table.
+5. Place this project at `C:\xampp\htdocs\HRMS`.
+6. Open `http://localhost/HRMS/`.
 
 Employee login credentials:
 
@@ -68,6 +71,15 @@ plus the credential year. The password uses the same four letters with an
 initial capital plus the year. Run `database/migration_employee_auth.sql` for
 an existing database, or use the credentials already included in the fresh
 schema.
+
+When an employee is created from the admin panel, `login_username`,
+`password_hash`, and `credential_year` are generated automatically. The
+temporary password is shown once in the creation success message. If the
+generated username already exists, a numeric suffix is added to keep it
+unique.
+
+Employee full names must contain at least four letters. Letters, spaces,
+apostrophes, hyphens, and periods are allowed.
 
 Optional demo leave data:
 
@@ -136,5 +148,5 @@ Change the seeded password before production use. Update database credentials in
 
 1. Add POST forms and CSRF validation for employee, shift, punch, leave, and correction actions.
 2. Add OOP services for punch pairing, attendance calculation, leave priority deduction, and CL carry-forward.
-3. Add role permissions, `audit_logs`, pagination, filtering, and CSV/PDF exports.
+3. Add role permissions and CSV/PDF exports.
 4. Add automated tests for overnight shifts, missing punches, half days, partial leave, and month-end carry-forward.

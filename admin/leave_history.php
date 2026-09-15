@@ -5,7 +5,7 @@ requireLogin();
 $conn = adminDb();
 $employeeId = (int)($_GET['employee_id'] ?? 0);
 $month = preg_match('/^\d{4}-\d{2}$/', (string)($_GET['month'] ?? '')) ? $_GET['month'] : '';
-$employees = $conn->query('SELECT id,employee_code,full_name FROM employees ORDER BY full_name');
+$employees = $conn->query('SELECT id,employee_code,full_name FROM employees WHERE status="active" ORDER BY full_name');
 if ($employeeId > 0 && $month !== '') {
     $stmt = $conn->prepare('SELECT l.*,e.employee_code,e.full_name FROM leave_applications l JOIN employees e ON e.id=l.employee_id WHERE l.employee_id=? AND DATE_FORMAT(l.from_date,"%Y-%m")=? ORDER BY l.from_date DESC,l.created_at DESC');
     $stmt->bind_param('is', $employeeId, $month);

@@ -9,6 +9,7 @@ function adminHeader(string $title, string $active = 'dashboard'): void
         'dashboard' => ['📊', 'Dashboard', '/admin/dashboard.php'],
         'employees' => ['👥', 'Employees', '/admin/employees.php'],
         'shifts' => ['⏱️', 'Shifts', '/admin/shifts.php'],
+        'punches' => ['↔️', 'Punches', '/admin/punches.php'],
         'attendance' => ['🗓️', 'Attendance', '/admin/attendance.php'],
         'leaves' => ['🌿', 'Leave Management', '/admin/leaves.php'],
         'leave_balances' => ['💳', 'Leave Balances', '/admin/leave_balances.php'],
@@ -40,7 +41,7 @@ function adminHeader(string $title, string $active = 'dashboard'): void
                         </a>
                     <?php endforeach; ?>
                 </nav>
-                <div class="side-footer"><span>Secure admin workspace</span><a href="<?= BASE_URL ?>/admin/logout.php">Log out ↗</a></div>
+                <div class="side-footer"><span>Secure admin workspace</span><a class="topbar-logout" href="<?= BASE_URL ?>/admin/logout.php"><span class="logout-icon" aria-hidden="true">↪</span><span>Logout</span></a></div>
             </aside>
             <section class="main-area">
                 <header class="admin-topbar">
@@ -48,7 +49,10 @@ function adminHeader(string $title, string $active = 'dashboard'): void
                         <p class="eyebrow">MANUFACTURING HRMS</p>
                         <h1><?= e($title) ?></h1>
                     </div>
-                    <div class="profile-chip"><span class="avatar">👤</span><span><?= e($_SESSION['hrms_admin_name'] ?? 'Admin') ?><small><?= e($_SESSION['hrms_admin_role'] ?? 'Admin') ?></small></span></div>
+                    <div class="topbar-actions">
+                        <div class="profile-chip"><span class="avatar">👤</span><span><?= e($_SESSION['hrms_admin_name'] ?? 'Super Admin') ?><small><?= e($_SESSION['hrms_admin_role'] ?? 'Super Admin') ?></small></span></div>
+                        <a class="topbar-logout" href="<?= BASE_URL ?>/admin/logout.php" title="Log out of the admin panel"><span class="logout-icon" aria-hidden="true">↪</span><span>Logout</span></a>
+                    </div>
                 </header>
                 <main class="page-content">
                 <?php

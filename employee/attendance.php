@@ -35,10 +35,10 @@ employeeHeader('My Attendance', 'attendance'); ?>
             <tbody><?php while ($r = $rows->fetch_assoc()): ?><tr>
                         <td><?= e(displayDate($r['attendance_date'])) ?></td>
                         <td><?= e(ucwords(str_replace('_', ' ', $r['status']))) ?></td>
-                        <td><?= $r['total_work_minutes'] ?></td>
-                        <td><?= $r['late_minutes'] ?></td>
-                        <td><?= $r['early_out_minutes'] ?></td>
-                        <td><?= $r['overtime_minutes'] ?></td>
+                        <td><?= (int)$r['total_work_minutes'] < 60 ? (int)$r['total_work_minutes'] . ' min' : e(displayMinutes((int)$r['total_work_minutes'])) ?></td>
+                        <td><?= (int)$r['late_minutes'] < 60 ? (int)$r['late_minutes'] . ' min' : e(displayMinutes((int)$r['late_minutes'])) ?></td>
+                        <td><?= (int)$r['early_out_minutes'] < 60 ? (int)$r['early_out_minutes'] . ' min' : e(displayMinutes((int)$r['early_out_minutes'])) ?></td>
+                        <td><?= (int)$r['overtime_minutes'] < 60 ? (int)$r['overtime_minutes'] . ' min' : e(displayMinutes((int)$r['overtime_minutes'])) ?></td>
                         <td><?= e((string)$r['remarks']) ?></td>
                     </tr><?php endwhile;
                         if (!$rows->num_rows): ?><tr>

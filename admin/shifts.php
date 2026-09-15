@@ -12,6 +12,7 @@ try {
             $s = $conn->prepare('DELETE FROM shifts WHERE id=?');
             $s->bind_param('i', $id);
             $s->execute();
+            auditLog($conn, 'shift', $id, 'delete');
             redirectWithFlash('/admin/shifts.php', 'Shift deleted.');
         }
         $name = postText('shift_name', 100);
@@ -27,11 +28,13 @@ try {
             $s = $conn->prepare('UPDATE shifts SET shift_name=?,start_time=?,end_time=?,grace_minutes=?,late_threshold_minutes=?,overtime_after_minutes=?,is_night_shift=? WHERE id=?');
             $s->bind_param('sssiiiii', $name, $start, $end, $grace, $late, $overtime, $night, $id);
             $s->execute();
+            auditLog($conn, 'shift', $id, 'update', ['shift_name' => $name, 'start_time' => $start, 'end_time' => $end]);
             redirectWithFlash('/admin/shifts.php', 'Shift updated.');
         }
         $s = $conn->prepare('INSERT INTO shifts (shift_name,start_time,end_time,grace_minutes,late_threshold_minutes,overtime_after_minutes,is_night_shift) VALUES (?,?,?,?,?,?,?)');
         $s->bind_param('sssiiii', $name, $start, $end, $grace, $late, $overtime, $night);
         $s->execute();
+        auditLog($conn, 'shift', $s->insert_id, 'create', ['shift_name' => $name, 'start_time' => $start, 'end_time' => $end]);
         redirectWithFlash('/admin/shifts.php', 'Shift created.');
     }
 } catch (Throwable $e) {
@@ -46,7 +49,16 @@ if (isset($_GET['edit'])) {
     $s->execute();
     $edit = $s->get_result()->fetch_assoc();
 }
-$rows = $conn->query('SELECT * FROM shifts ORDER BY start_time');
+$pageSize = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$totalRows = (int)$conn->query('SELECT COUNT(*) AS total FROM shifts')->fetch_assoc()['total'];
+$totalPages = max(1, (int)ceil($totalRows / $pageSize));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $pageSize;
+$rows = $conn->prepare('SELECT * FROM shifts ORDER BY start_time LIMIT ? OFFSET ?');
+$rows->bind_param('ii', $pageSize, $offset);
+$rows->execute();
+$rows = $rows->get_result();
 $notice = consumeFlash();
 adminHeader('Shift Setup', 'shifts');
 ?>
@@ -92,5 +104,6 @@ adminHeader('Shift Setup', 'shifts');
         </div>
     <?php endwhile; ?>
 </div>
+<?php if ($totalPages > 1): ?><nav class="pagination" aria-label="Shift pages"><?php for ($i = 1; $i <= $totalPages; $i++): ?><a class="<?= $i === $page ? 'active' : '' ?>" href="?page=<?= $i ?>"><?= $i ?></a><?php endfor; ?></nav><?php endif; ?>
 
 <?php adminFooter(); ?>

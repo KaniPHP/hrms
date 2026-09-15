@@ -37,6 +37,18 @@ function getDbConnection(): mysqli
         return $date ? $date->format('d/m/Y H:i') : $value;
     }
 
+    function displayMinutes(int $minutes): string
+    {
+        if ($minutes < 60) {
+            return $minutes . ' min';
+        }
+        $hours = intdiv($minutes, 60);
+        $remainingMinutes = $minutes % 60;
+        return $remainingMinutes > 0
+            ? $hours . ' hr ' . $remainingMinutes . ' min'
+            : $hours . ' hr';
+    }
+
     $conn->set_charset('utf8mb4');
     return $conn;
 }

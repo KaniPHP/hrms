@@ -12,6 +12,7 @@ try {
             $s = $conn->prepare('DELETE FROM monthly_attendance_processing WHERE id=?');
             $s->bind_param('i', $id);
             $s->execute();
+            auditLog($conn, 'monthly_processing', $id, 'delete');
             redirectWithFlash('/admin/processing.php', 'Processing run deleted.');
         }
         $month = trim((string)($_POST['process_month'] ?? date('Y-m')));
@@ -48,6 +49,7 @@ try {
             $s->bind_param('ssiis', $month, $status, $employees, $records, $completed);
         }
         $s->execute();
+        auditLog($conn, 'monthly_processing', $action === 'update' ? $id : $s->insert_id, $action === 'update' ? 'update' : 'create', ['process_month' => $month, 'status' => $status]);
         redirectWithFlash('/admin/processing.php', $action === 'update' ? 'Processing run updated.' : 'Processing run created.');
     }
 } catch (Throwable $e) {
@@ -62,7 +64,16 @@ if (isset($_GET['edit'])) {
     $s->execute();
     $edit = $s->get_result()->fetch_assoc();
 }
-$rows = $conn->query('SELECT * FROM monthly_attendance_processing ORDER BY created_at DESC');
+$pageSize = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$totalRows = (int)$conn->query('SELECT COUNT(*) AS total FROM monthly_attendance_processing')->fetch_assoc()['total'];
+$totalPages = max(1, (int)ceil($totalRows / $pageSize));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $pageSize;
+$rows = $conn->prepare('SELECT * FROM monthly_attendance_processing ORDER BY created_at DESC LIMIT ? OFFSET ?');
+$rows->bind_param('ii', $pageSize, $offset);
+$rows->execute();
+$rows = $rows->get_result();
 $notice = consumeFlash();
 adminHeader('Monthly Processing', 'processing');
 ?>
@@ -124,4 +135,6 @@ adminHeader('Monthly Processing', 'processing');
                     </tr><?php endwhile; ?></tbody>
         </table>
     </div>
-</div><?php adminFooter(); ?>
+</div>
+<?php if ($totalPages > 1): ?><nav class="pagination" aria-label="Monthly processing pages"><?php for ($i = 1; $i <= $totalPages; $i++): ?><a class="<?= $i === $page ? 'active' : '' ?>" href="?page=<?= $i ?>"><?= $i ?></a><?php endfor; ?></nav><?php endif; ?>
+<?php adminFooter(); ?>

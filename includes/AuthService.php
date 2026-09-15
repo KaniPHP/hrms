@@ -32,7 +32,7 @@ final class AuthService
     {
         $stmt = Database::connection()->prepare(
             'SELECT id, full_name, password_hash, login_username FROM employees
-             WHERE login_username=? AND status <> "inactive" LIMIT 1'
+             WHERE login_username=? AND status = "active" LIMIT 1'
         );
         $stmt->bind_param('s', $username);
         $stmt->execute();

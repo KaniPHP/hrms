@@ -18,16 +18,17 @@ try {
             $s = $conn->prepare('DELETE FROM attendance_records WHERE id=?');
             $s->bind_param('i', $id);
             $s->execute();
+            auditLog($conn, 'attendance', $id, 'delete');
             redirectWithFlash('/admin/attendance.php?date=' . urlencode($date), 'Attendance deleted.');
         }
         $employee = postInt('employee_id');
         $day = postDate('attendance_date');
         $status = $_POST['status'] ?? 'present';
-        $allowed = ['present', 'absent', 'half_day', 'late', 'early_out', 'holiday', 'leave', 'weekly_off', 'manual_adjustment'];
+        $allowed = ['present', 'absent', 'half_day', 'late', 'early_out', 'holiday', 'leave', 'weekly_off', 'missing_punch', 'manual_adjustment'];
         if (!in_array($status, $allowed, true)) {
             throw new InvalidArgumentException('Please select a valid attendance status.');
         }
-        $employeeCheck = $conn->prepare('SELECT id FROM employees WHERE id=? LIMIT 1');
+        $employeeCheck = $conn->prepare('SELECT id FROM employees WHERE id=? AND status="active" LIMIT 1');
         $employeeCheck->bind_param('i', $employee);
         $employeeCheck->execute();
         if (!$employeeCheck->get_result()->num_rows) {
@@ -55,6 +56,13 @@ try {
         $shift = (int)($_POST['shift_id'] ?? 0) ?: null;
         if ($action === 'update') {
             $id = postInt('id');
+            $before = $conn->prepare('SELECT status,remarks FROM attendance_records WHERE id=?');
+            $before->bind_param('i', $id);
+            $before->execute();
+            $oldAttendance = $before->get_result()->fetch_assoc();
+            if (!$oldAttendance) {
+                throw new InvalidArgumentException('Attendance record not found.');
+            }
             $duplicate = $conn->prepare('SELECT id FROM attendance_records WHERE employee_id=? AND attendance_date=? AND id<>? LIMIT 1');
             $duplicate->bind_param('isi', $employee, $day, $id);
             $duplicate->execute();
@@ -64,6 +72,13 @@ try {
             $s = $conn->prepare('UPDATE attendance_records SET employee_id=?,attendance_date=?,shift_id=?,status=?,total_work_minutes=?,late_minutes=?,early_out_minutes=?,overtime_minutes=?,remarks=? WHERE id=?');
             $s->bind_param('isisiiiisi', $employee, $day, $shift, $status, $work, $late, $early, $overtime, $remarks, $id);
             $s->execute();
+            auditLog($conn, 'attendance', $id, 'update', ['employee_id' => $employee, 'attendance_date' => $day, 'status' => $status]);
+            if ($oldAttendance['status'] !== $status || (string)$oldAttendance['remarks'] !== $remarks) {
+                $adminId = (int)($_SESSION['hrms_admin_id'] ?? 0) ?: null;
+                $audit = $conn->prepare('INSERT INTO attendance_correction_logs (attendance_id,corrected_by,old_status,new_status,old_remarks,new_remarks) VALUES (?,?,?,?,?,?)');
+                $audit->bind_param('iissss', $id, $adminId, $oldAttendance['status'], $status, $oldAttendance['remarks'], $remarks);
+                $audit->execute();
+            }
         } else {
             $duplicate = $conn->prepare('SELECT id FROM attendance_records WHERE employee_id=? AND attendance_date=? LIMIT 1');
             $duplicate->bind_param('is', $employee, $day);
@@ -74,6 +89,7 @@ try {
             $s = $conn->prepare('INSERT INTO attendance_records (employee_id,attendance_date,shift_id,status,total_work_minutes,late_minutes,early_out_minutes,overtime_minutes,remarks) VALUES (?,?,?,?,?,?,?,?,?)');
             $s->bind_param('isisiiiis', $employee, $day, $shift, $status, $work, $late, $early, $overtime, $remarks);
             $s->execute();
+            auditLog($conn, 'attendance', $s->insert_id, 'create', ['employee_id' => $employee, 'attendance_date' => $day, 'status' => $status]);
         }
         redirectWithFlash('/admin/attendance.php?date=' . urlencode($day), $action === 'update' ? 'Attendance updated.' : 'Attendance created.');
     }
@@ -99,7 +115,7 @@ if (isset($_GET['edit'])) {
     $s->execute();
     $edit = $s->get_result()->fetch_assoc();
 }
-$employees = $conn->query('SELECT id,employee_code,full_name FROM employees ORDER BY full_name');
+$employees = $conn->query('SELECT id,employee_code,full_name FROM employees WHERE status="active" ORDER BY full_name');
 $pageSize = 10;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $countRows = $conn->prepare('SELECT COUNT(*) AS total FROM attendance_records WHERE attendance_date=?');
@@ -133,7 +149,7 @@ adminHeader('Attendance', 'attendance');
         <?php if ($edit): ?><input type="hidden" name="id" value="<?= (int)$edit['id'] ?>"><?php endif; ?>
         <div class="form-grid"><label>Employee<select name="employee_id" required><?php while ($emp = $employees->fetch_assoc()): ?><option value="<?= (int)$emp['id'] ?>" <?= (($edit['employee_id'] ?? '') == $emp['id']) ? 'selected' : '' ?>><?= e($emp['employee_code'] . ' - ' . $emp['full_name']) ?></option><?php endwhile; ?></select></label>
             <label>Date<input type="text" name="attendance_date" required value="<?= e(displayDate($edit['attendance_date'] ?? $date)) ?>" placeholder="dd/mm/yyyy" inputmode="numeric" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" aria-label="Attendance date (dd/mm/yyyy)"></label>
-            <label>Status<select name="status"><?php foreach (['present', 'absent', 'half_day', 'late', 'early_out', 'holiday', 'leave', 'weekly_off', 'manual_adjustment'] as $v): ?><option value="<?= $v ?>" <?= (($edit['status'] ?? 'present') === $v) ? 'selected' : '' ?>><?= e(ucwords(str_replace('_', ' ', $v))) ?></option><?php endforeach; ?></select></label>
+            <label>Status<select name="status"><?php foreach (['present', 'absent', 'half_day', 'late', 'early_out', 'holiday', 'leave', 'weekly_off', 'missing_punch', 'manual_adjustment'] as $v): ?><option value="<?= $v ?>" <?= (($edit['status'] ?? 'present') === $v) ? 'selected' : '' ?>><?= e(ucwords(str_replace('_', ' ', $v))) ?></option><?php endforeach; ?></select></label>
             <label>Work minutes<input type="number" min="0" name="total_work_minutes" value="<?= (int)($edit['total_work_minutes'] ?? 0) ?>"></label>
             <label>Late minutes<input type="number" min="0" name="late_minutes" value="<?= (int)($edit['late_minutes'] ?? 0) ?>"></label>
             <label>Early-out minutes<input type="number" min="0" name="early_out_minutes" value="<?= (int)($edit['early_out_minutes'] ?? 0) ?>"></label>
@@ -166,10 +182,10 @@ adminHeader('Attendance', 'attendance');
                         <td><strong><?= e($row['full_name']) ?></strong><br><small><?= e($row['employee_code']) ?></small></td>
                         <td><?= e(displayDate($row['attendance_date'])) ?></td>
                         <td><?= e(ucwords(str_replace('_', ' ', $row['status']))) ?></td>
-                        <td><?= (int)$row['total_work_minutes'] ?></td>
-                        <td><?= (int)$row['late_minutes'] ?></td>
-                        <td><?= (int)$row['early_out_minutes'] ?></td>
-                        <td><?= (int)$row['overtime_minutes'] ?></td>
+                        <td><?= (int)$row['total_work_minutes'] < 60 ? (int)$row['total_work_minutes'] . ' min' : e(displayMinutes((int)$row['total_work_minutes'])) ?></td>
+                        <td><?= (int)$row['late_minutes'] < 60 ? (int)$row['late_minutes'] . ' min' : e(displayMinutes((int)$row['late_minutes'])) ?></td>
+                        <td><?= (int)$row['early_out_minutes'] < 60 ? (int)$row['early_out_minutes'] . ' min' : e(displayMinutes((int)$row['early_out_minutes'])) ?></td>
+                        <td><?= (int)$row['overtime_minutes'] < 60 ? (int)$row['overtime_minutes'] . ' min' : e(displayMinutes((int)$row['overtime_minutes'])) ?></td>
                         <td><a class="btn btn-small" href="?date=<?= e($date) ?>&page=<?= $page ?>&edit=<?= (int)$row['id'] ?>">Edit</a>
                             <form class="inline-form" method="post" data-ajax-form onsubmit="return confirm('Delete attendance?')"><input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$row['id'] ?>"><button class="btn btn-small">Delete</button></form>
                         </td>

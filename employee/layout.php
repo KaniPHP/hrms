@@ -22,7 +22,7 @@ function employeeHeader(string $title, string $active = 'dashboard'): void
             <aside class="sidebar"><a class="side-brand" href="<?= BASE_URL ?>/employee/dashboard.php"><span>✦</span> HRMS <small>EMPLOYEE</small></a>
                 <p class="menu-caption">MY WORKSPACE</p>
                 <nav><?php foreach ($menus as $key => $menu): ?><a class="side-link <?= $active === $key ? 'active' : '' ?>" href="<?= BASE_URL . $menu[2] ?>"><span><?= $menu[0] ?></span><?= e($menu[1]) ?></a><?php endforeach; ?></nav>
-                <div class="side-footer"><span>Employee self-service</span><a href="<?= BASE_URL ?>/employee/logout.php">Log out ↗</a></div>
+                <div class="side-footer"><span>Employee self-service</span><a class="topbar-logout" href="<?= BASE_URL ?>/employee/logout.php"><span class="logout-icon" aria-hidden="true">↪</span><span>Logout</span></a></div>
             </aside>
             <section class="main-area">
                 <header class="admin-topbar">
@@ -30,7 +30,10 @@ function employeeHeader(string $title, string $active = 'dashboard'): void
                         <p class="eyebrow">EMPLOYEE PORTAL</p>
                         <h1><?= e($title) ?></h1>
                     </div>
-                    <div class="profile-chip"><span class="avatar">👤</span><span><?= e($_SESSION['hrms_employee_name']) ?><small>Employee</small></span><a class="btn btn-small" href="<?= BASE_URL ?>/employee/logout.php">Logout</a></div>
+                    <div class="topbar-actions">
+                        <div class="profile-chip"><span class="avatar">👤</span><span><?= e($_SESSION['hrms_employee_name']) ?><small>Employee</small></span></div>
+                        <a class="topbar-logout" href="<?= BASE_URL ?>/employee/logout.php" title="Log out of the employee portal"><span class="logout-icon" aria-hidden="true">↪</span><span>Logout</span></a>
+                    </div>
                 </header>
                 <main class="page-content"><?php }
                                         function employeeFooter(): void

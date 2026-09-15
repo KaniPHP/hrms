@@ -109,6 +109,19 @@ function sendAjaxError(Throwable $error): never
     sendAjaxJson(false, $error->getMessage(), 'error');
 }
 
+function auditLog(mysqli $conn, string $entityType, int $entityId, string $action, array $details = []): void
+{
+    $actorId = (int)($_SESSION['hrms_admin_id'] ?? $_SESSION['hrms_user_id'] ?? 0) ?: null;
+    $ipAddress = substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+    $payload = $details ? json_encode($details, JSON_THROW_ON_ERROR) : null;
+    $stmt = $conn->prepare(
+        'INSERT INTO audit_logs (actor_user_id,entity_type,entity_id,action,details,ip_address)
+         VALUES (?,?,?,?,?,?)'
+    );
+    $stmt->bind_param('isisss', $actorId, $entityType, $entityId, $action, $payload, $ipAddress);
+    $stmt->execute();
+}
+
 function leaveBalance(mysqli $conn, int $employeeId, string $leaveType, string $month): ?array
 {
     $stmt = $conn->prepare(

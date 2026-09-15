@@ -5,7 +5,7 @@ requireLogin();
 $conn = adminDb();
 $employeeId = (int)($_GET['employee_id'] ?? 0);
 $month = preg_match('/^\d{4}-\d{2}$/', (string)($_GET['month'] ?? '')) ? $_GET['month'] : date('Y-m');
-$employees = $conn->query('SELECT id,employee_code,full_name FROM employees ORDER BY full_name');
+$employees = $conn->query('SELECT id,employee_code,full_name FROM employees WHERE status="active" ORDER BY full_name');
 if ($employeeId > 0) {
     $stmt = $conn->prepare(
         'SELECT e.employee_code,e.full_name,b.leave_type_code,b.opening_balance,b.earned_balance,
