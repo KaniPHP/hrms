@@ -82,10 +82,10 @@ adminHeader('Monthly Processing', 'processing');
         <div class="form-grid">
             <label>Process month<input type="month" name="process_month" required value="<?= e($edit['process_month'] ?? date('Y-m')) ?>"></label>
             <label>Status<select name="status">
-                <?php foreach (['pending', 'processing', 'completed', 'review_required'] as $v): ?>
-                    <option value="<?= $v ?>" <?= (($edit['status'] ?? 'pending') === $v) ? 'selected' : '' ?>><?= e(ucwords(str_replace('_', ' ', $v))) ?></option>
-                <?php endforeach; ?>
-            </select></label>
+                    <?php foreach (['pending', 'processing', 'completed', 'review_required'] as $v): ?>
+                        <option value="<?= $v ?>" <?= (($edit['status'] ?? 'pending') === $v) ? 'selected' : '' ?>><?= e(ucwords(str_replace('_', ' ', $v))) ?></option>
+                    <?php endforeach; ?>
+                </select></label>
         </div>
         <p class="muted">Employee and attendance totals are calculated from current schema data.</p>
         <button class="btn btn-primary"><?= $edit ? 'Update run' : 'Create run' ?></button>

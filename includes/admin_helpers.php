@@ -56,12 +56,22 @@ function postText(string $key, int $max = 255): string
 
 function postDate(string $key): string
 {
-    $value = (string)($_POST[$key] ?? '');
-    $date = DateTime::createFromFormat('Y-m-d', $value);
-    if (!$date || $date->format('Y-m-d') !== $value) {
-        throw new InvalidArgumentException('Please enter a valid date.');
+    return normalizeDate((string)($_POST[$key] ?? ''), 'Please enter a valid date in DD/MM/YYYY format.');
+}
+
+function normalizeDate(string $value, string $errorMessage = 'Please enter a valid date in DD/MM/YYYY format.'): string
+{
+    $value = trim($value);
+    $formats = ['Y-m-d', 'd/m/Y'];
+    foreach ($formats as $format) {
+        $date = DateTime::createFromFormat('!' . $format, $value);
+        $errors = DateTime::getLastErrors();
+        $hasErrors = is_array($errors) && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
+        if ($date && !$hasErrors && $date->format($format) === $value) {
+            return $date->format('Y-m-d');
+        }
     }
-    return $value;
+    throw new InvalidArgumentException($errorMessage);
 }
 
 function redirectWithFlash(string $path, string $message, string $type = 'success'): void

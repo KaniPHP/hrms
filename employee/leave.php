@@ -10,8 +10,8 @@ try {
         $s = $db->prepare('SELECT leave_type_code,opening_balance,earned_balance,utilized_balance,closing_balance,carry_forward FROM employee_leave_balances WHERE employee_id=? AND month_year=? ORDER BY FIELD(leave_type_code,"WO","EL","FL","CPL","CL")');
         $s->bind_param('is', $id, $month); $s->execute(); $result = $s->get_result();
         while ($row = $result->fetch_assoc()) $response['balances'][] = $row;
-        $s = $db->prepare('SELECT id,leave_type_code,from_date,to_date,days_requested,status,reason FROM leave_applications WHERE employee_id=? ORDER BY created_at DESC');
-        $s->bind_param('i', $id); $s->execute(); $result = $s->get_result();
+        $s = $db->prepare('SELECT id,leave_type_code,from_date,to_date,days_requested,status,reason FROM leave_applications WHERE employee_id=? AND from_date <= LAST_DAY(CONCAT(?,"-01")) AND to_date >= CONCAT(?,"-01") ORDER BY created_at DESC');
+        $s->bind_param('iss', $id, $month, $month); $s->execute(); $result = $s->get_result();
         while ($row = $result->fetch_assoc()) $response['history'][] = $row;
         sendAjaxJson(true, 'Leave data loaded.', 'success', '/employee/leave.php?month=' . urlencode($month), $response);
     }
@@ -34,6 +34,13 @@ try {
         if (!in_array($type, ['WO', 'EL', 'FL', 'CPL', 'CL'], true) || $to < $from || $days <= 0) throw new InvalidArgumentException('Please enter valid leave details.');
         $leaveDay = $_POST['leave_day'] ?? 'full';
         if (!in_array($leaveDay, ['full', 'half'], true)) throw new InvalidArgumentException('Select a valid leave duration.');
+        $halfDaySession = $_POST['half_day_session'] ?? '';
+        if ($leaveDay === 'half' && !in_array($halfDaySession, ['forenoon', 'afternoon'], true)) {
+            throw new InvalidArgumentException('Please select whether the half-day leave is Forenoon or Afternoon.');
+        }
+        if ($leaveDay === 'half') {
+            $reason = '[Half day: ' . ucfirst($halfDaySession) . '] ' . $reason;
+        }
         $expected = $leaveDay === 'half' ? 0.5 + (0) : ((new DateTimeImmutable($from))->diff(new DateTimeImmutable($to))->days + 1);
         if ($leaveDay === 'half' && $from !== $to || abs($days - (float)$expected) > 0.001) throw new InvalidArgumentException('Days must match the selected dates and duration.');
         $s = $db->prepare('SELECT closing_balance FROM employee_leave_balances WHERE employee_id=? AND leave_type_code=? AND month_year=?');
@@ -60,32 +67,20 @@ try {
     if (isAjaxRequest()) sendAjaxError($e);
     $error = $e->getMessage();
 }
-employeeHeader('My Leave', 'leave'); ?><div id="employee-leave-flash"></div><div class="page-heading">
-    <div>
+employeeHeader('My Leave', 'leave'); ?><div id="employee-leave-flash"></div><div class="leave-overview-layout">
+    <section class="leave-intro-card">
         <p class="eyebrow">LEAVE SELF SERVICE</p>
-        <h2>Balance & history</h2>
-    </div>
-    <form class="inline-form" id="leave-month-form"><input type="month" name="month" value="<?= e($month) ?>"><button class="btn btn-primary" type="submit">View month</button></form>
-</div><?php if ($error): ?><div class="alert alert-error"><?= e($error) ?></div><?php endif; ?><div class="panel table-panel">
-    <h3>Leave balance — <span id="leave-month-label"><?= e($month) ?></span></h3>
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Type</th>
-                    <th>Opening</th>
-                    <th>Earned</th>
-                    <th>Taken</th>
-                    <th>Available</th>
-                    <th>Carry forward</th>
-                </tr>
-            </thead>
-            <tbody id="leave-balances-body"><tr><td colspan="6" class="empty-state">Loading balances...</td></tr></tbody>
-        </table>
-    </div>
-</div>
-<div class="panel form-panel">
-    <h3>Request leave</h3>
+        <h2>Balance &amp; history</h2>
+        <p>Plan your time off, review your monthly entitlement, and track every request from one place.</p>
+        <form class="leave-month-form" id="leave-month-form">
+            <label>View month<input type="month" name="month" value="<?= e($month) ?>"></label>
+            <button class="btn btn-light" type="submit">Load balance</button>
+        </form>
+        <div class="leave-intro-note">Selected month: <strong id="leave-month-label"><?= e($month) ?></strong></div>
+    </section>
+    <section class="panel form-panel leave-request-panel">
+    <div class="leave-section-heading"><div><p class="eyebrow">QUICK REQUEST</p><h3>Request leave</h3><p class="muted">Choose your dates and duration. Half-day requests require a session.</p></div><span class="leave-step">1</span></div>
+    <?php if ($error): ?><div class="alert alert-error"><?= e($error) ?></div><?php endif; ?>
     <form method="post" id="employee-leave-form"><input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>"><input type="hidden" name="action" value="create">
         <div class="form-grid"><label>Leave type<select name="leave_type_code" required>
                     <option>WO</option>
@@ -93,13 +88,23 @@ employeeHeader('My Leave', 'leave'); ?><div id="employee-leave-flash"></div><div
                     <option>FL</option>
                     <option>CPL</option>
                     <option>CL</option>
-                </select></label><label>From<input type="date" name="from_date" required></label><label>To<input type="date" name="to_date" required></label><label>Duration<select name="leave_day">
+                </select></label><label>From<input type="text" name="from_date" required placeholder="dd/mm/yyyy" inputmode="numeric" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" aria-label="From date (dd/mm/yyyy)"></label><label>To<input type="text" name="to_date" required placeholder="dd/mm/yyyy" inputmode="numeric" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" aria-label="To date (dd/mm/yyyy)"></label><label>Duration<select name="leave_day">
                     <option value="full">Full day</option>
                     <option value="half">Half day (0.5)</option>
+                </select></label><label class="half-day-session-field">Half-day session<select name="half_day_session">
+                    <option value="">Select session</option>
+                    <option value="forenoon">Forenoon</option>
+                    <option value="afternoon">Afternoon</option>
                 </select></label><label>Days<input type="number" min=".5" step=".5" name="days_requested" required readonly></label><label>Reason<input name="reason" maxlength="255"></label></div><button class="btn btn-primary">Submit request</button>
     </form>
+    </section>
 </div>
-<div class="panel table-panel">
+<section class="panel balance-panel employee-balance-panel">
+    <div class="panel-header"><div><p class="eyebrow">MONTHLY ENTITLEMENT</p><h3>Leave balance cards</h3></div><span class="status-pill status-leave" id="balance-period"><?= e($month) ?></span></div>
+    <div id="leave-balance-cards" class="employee-balance-grid"></div>
+    <div id="leave-balances-pagination" class="pagination"></div>
+</section>
+<section class="panel table-panel employee-history-panel">
     <h3>Request history</h3>
     <div class="table-wrap">
         <table>
@@ -116,4 +121,5 @@ employeeHeader('My Leave', 'leave'); ?><div id="employee-leave-flash"></div><div
             <tbody id="leave-history-body"><tr><td colspan="6" class="empty-state">Loading history...</td></tr></tbody>
         </table>
     </div>
+    <div id="leave-history-pagination" class="pagination"></div>
 </div><?php employeeFooter(); ?>

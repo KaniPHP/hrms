@@ -62,16 +62,16 @@ adminHeader('Shift Setup', 'shifts');
         <input type="hidden" name="action" value="<?= $edit ? 'update' : 'create' ?>">
         <?php if ($edit): ?><input type="hidden" name="id" value="<?= (int)$edit['id'] ?>">
         <?php endif; ?><div class="form-grid">
-        <label>Shift name<input name="shift_name" required value="<?= e($edit['shift_name'] ?? '') ?>"></label>
-        <label>Start time<input type="time" name="start_time" required value="<?= e(substr($edit['start_time'] ?? '09:00', 0, 5)) ?>"></label>
-        <label>End time<input type="time" name="end_time" required value="<?= e(substr($edit['end_time'] ?? '18:00', 0, 5)) ?>"></label>
-        <label>Grace minutes<input type="number" min="0" name="grace_minutes" value="<?= (int)($edit['grace_minutes'] ?? 10) ?>"></label>
-        <label>Late threshold<input type="number" min="0" name="late_threshold_minutes" value="<?= (int)($edit['late_threshold_minutes'] ?? 15) ?>"></label>
-        <label>Overtime after<input type="number" min="0" name="overtime_after_minutes" value="<?= (int)($edit['overtime_after_minutes'] ?? 60) ?>"></label>
-        <label><input type="checkbox" name="is_night_shift" value="1" <?= !empty($edit['is_night_shift']) ? 'checked' : '' ?>> Overnight shift</label>
-    </div>
-    <button class="btn btn-primary"><?= $edit ? 'Update shift' : 'Create shift' ?></button>
-</form>
+            <label>Shift name<input name="shift_name" required value="<?= e($edit['shift_name'] ?? '') ?>"></label>
+            <label>Start time<input type="time" name="start_time" required value="<?= e(substr($edit['start_time'] ?? '09:00', 0, 5)) ?>"></label>
+            <label>End time<input type="time" name="end_time" required value="<?= e(substr($edit['end_time'] ?? '18:00', 0, 5)) ?>"></label>
+            <label>Grace minutes<input type="number" min="0" name="grace_minutes" value="<?= (int)($edit['grace_minutes'] ?? 10) ?>"></label>
+            <label>Late threshold<input type="number" min="0" name="late_threshold_minutes" value="<?= (int)($edit['late_threshold_minutes'] ?? 15) ?>"></label>
+            <label>Overtime after<input type="number" min="0" name="overtime_after_minutes" value="<?= (int)($edit['overtime_after_minutes'] ?? 60) ?>"></label>
+            <label><input type="checkbox" name="is_night_shift" value="1" <?= !empty($edit['is_night_shift']) ? 'checked' : '' ?>> Overnight shift</label>
+        </div>
+        <button class="btn btn-primary"><?= $edit ? 'Update shift' : 'Create shift' ?></button>
+    </form>
 </div>
 <div class="card-grid">
     <?php while ($row = $rows->fetch_assoc()): ?>
@@ -90,7 +90,7 @@ adminHeader('Shift Setup', 'shifts');
                 <button class="btn btn-small">Delete</button>
             </form>
         </div>
-        <?php endwhile; ?>
-    </div>
-    
-    <?php adminFooter(); ?>
+    <?php endwhile; ?>
+</div>
+
+<?php adminFooter(); ?>
